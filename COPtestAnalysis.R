@@ -6,16 +6,6 @@
 #creates new data frames, downsamples the data, calculates center of pressure (COP) positions, and calls the 
 #function COPAnalysis.
 
-#1. housekeeping print execution time, whats currently loaded, and then load the packages
-
-Sys.time()
-ls()
-rm(list=ls())
-ls()
-starttime <- Sys.time()
-sink("C:\\Users\\jackpmanning\\OneDrive - Texas A&M University\\Documents\\Projects\\Manuscript JM_ES\\nohardcodeloop.RData", split=TRUE)
-#sink("\\nohardcodeloop.RData", split=TRUE)
-
 #load in appropriate packeges
 library(astsa)
 library(seewave)
@@ -25,19 +15,9 @@ library(rlist)
 library(writexl)
 #library(sazedR)
 
-
-#create functions for downsample and COPAnalysis
-#downsample source code
-downsample <- function(data, window_size)
-{
-  return(ts(as.ts(rollapply(zoo(data), width=window_size, by=window_size, FUN=mean)), frequency=1))
-}
-
 #COP Analysis code
-COPAnalysis <- function(PathName, FileName, sampfreq, COPx, COPy) {
-  library(writexl)
-  xlout <- file.path("C:\\Users\\jackpmanning\\OneDrive - Texas A&M University\\Documents\\Projects\\Manuscript JM_ES\\xlout")
-  
+COPAnalysis <- function(sampfreq, COPx, COPy) {
+
   # calculate number of data points
   n <- length(COPx)
   
@@ -55,26 +35,6 @@ COPAnalysis <- function(PathName, FileName, sampfreq, COPx, COPy) {
   
   # Finds radius of COP path.
   COPd <- sqrt(COPxnorm^2 + COPynorm^2)
-  
-  # Plot COP data, x and y versus the time.
-  #send graphical output to png
-  png(file.path(PathName, paste0(FileName, "_COP.png")), width = 1200, height = 800)
-  
-  par(mfrow=c(2,2))
-  plot(t, COPxnorm, col="green", xlab="Time (s)", ylab="Distance (mm)", 
-       main=paste0("Subject: ", FileName, ", COPx=Green, COPy=Blue"), type="l")
-  lines(t, COPynorm, col="blue")
-  
-  # Plot COP path, y versus x.
-  plot(COPxnorm, COPynorm, xlab="x Distance (mm)", ylab="y Distance (mm)", 
-       main=paste0("Subject: ", FileName, ", COP Path"), type="l")
-  
-  # Plot COP radius versus frame. dev.off() stops sending visual output to png
-  plot(t, COPd, xlab="Time(s)", ylab="Distance (mm)", 
-       main=paste0("Subject: ", FileName, ", COP Distance"), type="l")
-  
-  #Stop sending graphical output to png 
-  dev.off()
   
   ## Linear analyses
   
@@ -131,15 +91,13 @@ COPAnalysis <- function(PathName, FileName, sampfreq, COPx, COPy) {
   
   prieto$lambda <- (sAP^2 + sML^2 + prieto$d) / 2  # from Sokal and Rohlf
   prieto$slope <- prieto$ellipRA / prieto$ellipRB
-  # prieto$slope <- sAPML / (prieto$lambda - sML^2) # from Sokal and Rohlf
+  prieto$slope <- sAPML / (prieto$lambda - sML^2) # from Sokal and Rohlf
   prieto$angle <- atan(prieto$slope)
-  
-  #start sending graphical output to pdf
-  pdf(paste(paste(outputs, "\\", FileName, "png", sep=""), substrRight(FileName, 11), ".pdf", sep=""))
   
   # Plotting 95% circle and ellipse over data
   
   conffig <- plot(COPxnorm, COPynorm, type="l", col="green")
+  
   theta <- (pi/180) * seq(0, 360)
   
   # Add 95% circle to plot
@@ -293,91 +251,8 @@ COPAnalysis <- function(PathName, FileName, sampfreq, COPx, COPy) {
   
     # 'medianfreq' = medianfreq,
     # 'freqdisp' = freqdisp
-  write_xlsx(copoutput, paste(xlout, paste(current.file, ".xlsx", sep=""), sep=""))
   
   return(copoutput)
 }
 
-substrRight <- function(x, n){
-  substr(x, nchar(x)-n+1, nchar(x))
-}
 
-#________________________________________________________________________________________________
-
-
-#_______________________________________________________________________________________________________________
-
-#Desktop in 332
-#setwd("C:\\Users\\jackpmanning\\Documents\\MSThesisData")
-#setwd("005")	#change this each time to the correct folder
-
-#Work Laptop
-#1. set the working directory and the output files
-setwd("C:\\Users\\jackpmanning\\OneDrive - Texas A&M University\\Documents\\Projects\\Manuscript JM_ES\\Manning DT Raw Data")
-upone <- file.path("C:\\Users\\jackpmanning\\OneDrive - Texas A&M University\\Documents\\Projects\\Manuscript JM_ES")
-outputs <- paste(upone, "\\", "Outputs", sep="")
-xlout <- paste(upone, "\\", "xlout", sep="")
-
-
-#2. get a list of all the subfolders
-foldernames <- as.list(list.dirs(getwd(), full.names = FALSE, recursive = FALSE))
-
-# for(i in 1:length(foldernames)){
-#   #7. Make new folders for each data output 
-#   new_folder_name <- paste(foldernames[i], "png", sep="")
-#   # set the path of the new subfolder
-#   new_folder_path <- file.path(outputs, "\\", new_folder_name)
-#   new_folder_path <- gsub("/", "\\", new_folder_path)
-#   # create the new subfolder
-#   dir.create(new_folder_path, recursive = TRUE)
-# }
-
-p <- 0
-#1.cloop through a folder that contains folders which contain data in .txt files
-for(i in 1:length(foldernames)){
-  
-  #1a. create a list with the names of all data files in current working directory
-  filename <- as.list(list.files((paste(getwd(), "/", foldernames[i], sep="")), pattern="\\.txt$", full.names=TRUE))
-    for(j in 1:length(filename)){
-      
-      #clean up the file name string
-      current.file <- gsub("/", "", substrRight(filename[j], 11))
-      current.file <- gsub(".txt", "", current.file)
-      print(current.file)
-      
-      #Load current data file which is filename[[j]]
-      data1 <- read.delim(filename[[j]], header = F, sep = ",")
-      
-      #rename the data frame columns
-      names(data1)[3] <- "forcez"
-      names(data1)[4] <- "momentx"
-      names(data1)[5] <- "momenty"
-    
-      #4. create vectors of 6000 0's
-      forcez <- c(rep(0,6000))
-      momentx <- c(rep(0,6000))
-      momenty <- c(rep(0,6000))
-      
-      #create data frame with zero vectors
-      dfzeros <- data.frame(forcez, momentx, momenty)
-      
-      #downsample data then replace dfzeros vectors with downsampled data
-      dfzeros$forcez <- downsample(as.ts(ifelse(data1[["forcez"]] == 0, data1[["forcez"]][1], data1[["forcez"]])), window_size = 2)
-      dfzeros$momentx <- downsample(as.ts(data1[["momentx"]]), window_size = 2)
-      dfzeros$momenty <- downsample(as.ts(data1[["momenty"]]), window_size = 2)
-
-      #create x and y position vectors
-      dfzeros$xpos <- as.ts(dfzeros[["momentx"]]/dfzeros[["forcez"]])
-      dfzeros$ypos <- as.ts(dfzeros[["momenty"]]/dfzeros[["forcez"]])
-      
-      #COPAnalysis <- function(PathName, FileName, sampfreq, COPx, COPy)  
-      COPAnalysis(paste(outputs, "\\",foldernames[[i]], "png", sep=""), current.file, sampfreq = 50, COPx =  dfzeros$xpos, dfzeros$ypos)
-      
-    }
-  
-#count loop iterations
-  p <- p+1
-  print(p)
-
-}
-  
